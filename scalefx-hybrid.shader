@@ -496,7 +496,7 @@ FXAA_SUBPIX_CAP - Insures fine detail is not completely removed.
 */ 
 
 #ifndef FXAA_PRESET
-    #define FXAA_PRESET 3
+    #define FXAA_PRESET 4
 #endif
 #if (FXAA_PRESET == 3)
     #define FXAA_EDGE_THRESHOLD      (1.0/16.0)
@@ -509,7 +509,7 @@ FXAA_SUBPIX_CAP - Insures fine detail is not completely removed.
 #if (FXAA_PRESET == 4)
     #define FXAA_EDGE_THRESHOLD      (1.0/8.0)
     #define FXAA_EDGE_THRESHOLD_MIN  (1.0/24.0)
-    #define FXAA_SEARCH_STEPS        24
+    #define FXAA_SEARCH_STEPS        8
     #define FXAA_SEARCH_THRESHOLD    (1.0/4.0)
     #define FXAA_SUBPIX_CAP          (3.0/4.0)
     #define FXAA_SUBPIX_TRIM         (1.0/8.0)
