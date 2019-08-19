@@ -41,18 +41,18 @@
 uniform sampler2D rubyTexture;
 uniform vec2 rubyTextureSize;
 
-#define brightboost  1.3      // adjust brightness
+#define brightboost  1.40     // adjust brightness
 #define saturation   1.1      // 1.0 is normal saturation
 #define scanline     8.0      // scanline param, vertical sharpness
-#define beam_min     1.10     // dark area beam min - narrow
-#define beam_max     1.05     // bright area beam max - wide
-#define h_sharp      2.0      // pixel sharpness
+#define beam_min     1.00     // dark area beam min - narrow
+#define beam_max     1.00     // bright area beam max - wide
+#define h_sharp      2.25     // pixel sharpness
 #define bloompix     0.50     // glow shape, more is harder
 #define bloompixy    0.80     // glow shape, more is harder
-#define glow         0.07     // glow ammount
-#define mcut         0.20     // Mask 5&6 cutoff
-#define maskDark     0.50     // Dark "Phosphor"
-#define maskLight    1.25     // Light "Phosphor"
+#define glow         0.10     // glow ammount
+#define mcut         0.15     // Mask 5&6 cutoff
+#define maskDark     0.60     // Dark "Phosphor"
+#define maskLight    1.40     // Light "Phosphor"
 
 
 #define eps 1e-8
@@ -71,7 +71,7 @@ vec3 Mask(vec2 pos, vec3 c)
 	vec3 mask = vec3(maskDark, maskDark, maskDark);
 	
 	float mx = max(max(c.r,c.g),c.b);
-	vec3 maskTmp = vec3( min( 1.25*max(mx-mcut,0.0)/(1.0-mcut) ,maskDark));
+	vec3 maskTmp = vec3( min( 1.33*max(mx-mcut,0.0)/(1.0-mcut) ,maskDark));
 	float adj = maskLight - 0.4*(maskLight - 1.0)*mx + 0.75*(1.0-mx)*(1.0+0.4*mcut);	
 	mask = maskTmp;
 	pos.x = fract(pos.x/3.0);
@@ -121,8 +121,10 @@ void main()
 	
 	color*=brightboost;
 	color = min(color, 1.0);
-
+	
+	color = pow(color, vec3(1.2));
 	color*=Mask(gl_FragCoord.xy, sqrt(ctemp));
+	color = pow(color, vec3(1.0/1.2));
 	
 	vec2 x2 = 2.0*dx; vec2 x3 = 3.0*dx;
 	vec2 y2 = 2.0*dy;
@@ -185,7 +187,7 @@ void main()
 	
 	color = min(color, 1.0);
 
-	color = pow(color, vec3(0.525, 0.525, 0.525));
+	color = pow(color, vec3(0.5));
 	
 	float l = length(color);
 	color = normalize(pow(color + vec3(eps,eps,eps), vec3(saturation,saturation,saturation)))*l;
