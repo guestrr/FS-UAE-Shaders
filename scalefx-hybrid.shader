@@ -1218,8 +1218,8 @@ void main(void) {
 <fragment scale="1.0" filter="linear"><![CDATA[
 uniform sampler2D rubyTexture;
 
-#define DEBLUR 4.5
-#define SMART  0.5
+#define DEBLUR 4.0
+#define SMART  0.6
 
 const vec3 dtt = vec3(0.001,0.001,0.001);
 
