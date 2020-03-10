@@ -1215,7 +1215,7 @@ void main(void) {
 ]]></vertex>
 
 
-<fragment scale="1.0" filter="linear"><![CDATA[
+<fragment outscale="1.0" filter="linear"><![CDATA[
 uniform sampler2D rubyTexture;
 
 #define DEBLUR 4.0
