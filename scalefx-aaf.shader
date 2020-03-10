@@ -794,7 +794,7 @@ void main(void) {
 uniform sampler2D rubyTexture;
 
 #define DEBLUR 3.25
-#define SMART  0.4
+#define SMART  0.5
 
 const vec3 dtt = vec3(0.0001,0.0001,0.0001);
 
