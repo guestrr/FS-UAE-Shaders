@@ -164,7 +164,7 @@ uniform vec2 rubyTextureSize;
 #define maskbright 0.50    // CRT Mask Strength Bright Pixels  -0.50 - 1.0
 #define masksize 1.0       // CRT Mask size (2.0 is nice for 4k for masks 0.0-2.0) 1.0 or 2.0
 #define gamma_out 2.1      // Output Gamma, input gamma is 2.0
-#define vertmask  -0.25     // Scanline colors -0.30 for Red-Blue or up to 0.30 for Magenta-Green
+#define vertmask  -0.15     // Scanline colors -0.30 for Red-Blue or up to 0.30 for Magenta-Green
 
 #define slotmask     0.65  // Slot Mask Strength (from 0.0 to 1.0)
 #define slotwidth    3.00  // Slot Mask Width  (from 1.0 to 4.0)
