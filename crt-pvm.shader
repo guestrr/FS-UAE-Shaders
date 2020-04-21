@@ -143,12 +143,12 @@ uniform vec2 rubyOutputSize;
 uniform vec2 rubyTextureSize;
 
 
-#define bglow 0.02         // base glow value
+#define bglow 0.017         // base glow value
 #define autobrm 0.6        // automatic brightness for masks 0.0 to 1.0
 #define smart 1.0          // "0.0:OFF 1:Smart 2:Crop 3:Overscan Y Integer Scaling"
-#define brightboost1 1.50  // brightboost dark pixels
-#define brightboost2 1.10  // brightboost bright pixels
-#define bloom 0.50         // bloom strength 
+#define brightboost1 1.25  // brightboost dark pixels
+#define brightboost2 1.05 // brightboost bright pixels
+#define bloom 0.40         // bloom strength 
 #define stype 2.0          // scanline type 0.0, 1.0, 2.0  
 #define scanline1 5.0      // Scanline Shape Center
 #define scanline2 15.0     // Scanline Shape Edges
@@ -160,11 +160,11 @@ uniform vec2 rubyTextureSize;
 #define cubic 1.0          // 'Cubic filtering'  0.0 - 1.0
 #define mask 0.0           // CRT Mask (3&4 are 4k masks) 0.0 - 4.0
 #define maskmode 1.0       // CRT Mask Mode: Classic, Fine, Coarse  0.0 - 2.0
-#define maskdark 1.0       // CRT Mask Strength Dark Pixels  0.0 - 1.50
+#define maskdark 0.5       // CRT Mask Strength Dark Pixels  0.0 - 1.50
 #define maskbright -0.25   // CRT Mask Strength Bright Pixels  -0.50 - 1.0
 #define masksize 1.0       // CRT Mask size (2.0 is nice for 4k for masks 0.0-2.0) 1.0 or 2.0
 #define gamma_out 2.1      // Output Gamma, input gamma is 2.0
-#define vertmask  0.25     // Scanline colors -0.30 for Red-Blue or up to 0.30 for Mygenta-Green
+#define vertmask  0.30     // Scanline colors -0.30 for Red-Blue or up to 0.30 for Mygenta-Green
 
 	
 float st(float x)
