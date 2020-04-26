@@ -263,7 +263,7 @@ void main()
 	if (smart == 1.0 || smart == 2.0 || smart == 3.0)
 	{
 		float factor = rubyOutputSize.y/rubyInputSize.y;		
-		float intfactor = round(factor); if (smart == 2.0) intfactor = floor(factor); if (smart == 3.0) intfactor = ceil(factor);
+		float intfactor = floor(factor+0.5); if (smart == 2.0) intfactor = floor(factor); if (smart == 3.0) intfactor = ceil(factor);
 		float diff = factor/intfactor;
 		tex.y = Overscan(tex.y*(rubyTextureSize.y/rubyInputSize.y), diff)*(rubyInputSize.y/rubyTextureSize.y); 
 	}
