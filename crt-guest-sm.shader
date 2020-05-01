@@ -164,8 +164,10 @@ uniform vec2 rubyTextureSize;
 #define maskbright 0.40    // CRT Mask Strength Bright Pixels  -0.50 - 1.0
 #define masksize 1.0       // CRT Mask size (2.0 is nice for 4k for masks 0.0-2.0) 1.0 or 2.0
 #define gamma_out 2.1      // Output Gamma, input gamma is 2.0
-#define vertmask -0.15     // Scanline colors -0.30 for Red-Blue or up to 0.30 for Mygenta-Green
+#define vertmask -0.15     // Scanline colors -0.30 for Red-Blue or up to 0.30 for Magenta-Green
 
+#define WarpX       0.00   // x-curvature setting, 0.0 - 0.1
+#define WarpY       0.00   // y-curvature setting, 0.0 - 0.1
 	
 float st(float x)
 {
@@ -232,6 +234,14 @@ vec3 gc (vec3 c, float bd, float bb)
 	return b2*c;
 }
 
+// Lottes curvature (PD)
+
+vec2 Warp(vec2 pos)
+{
+	pos=pos*2.0-1.0;    
+	pos*=vec2(1.0+(pos.y*pos.y)*WarpX,1.0+(pos.x*pos.x)*WarpY);
+	return pos*0.5+0.5;
+}
 
 void main()
 {
@@ -246,6 +256,8 @@ void main()
 		float diff = factor/intfactor;
 		tex.y = Overscan(tex.y*(rubyTextureSize.y/rubyInputSize.y), diff)*(rubyInputSize.y/rubyTextureSize.y); 
 	}
+
+	tex = Warp(tex*(rubyTextureSize/rubyInputSize))*(rubyInputSize/rubyTextureSize); 
 
 	vec2 size     = rubyTextureSize;
 	vec2 inv_size = 1.0/rubyTextureSize;

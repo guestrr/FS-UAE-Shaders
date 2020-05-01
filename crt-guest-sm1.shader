@@ -171,6 +171,8 @@ uniform vec2 rubyTextureSize;
 #define double_slot  1.00  // Slot Mask Height  (1.0 or 2.0)
 #define slotms       1.00  // Slot Mask Size  (1.0 or 2.0)
 
+#define WarpX       0.00   // x-curvature setting, 0.0 - 0.1
+#define WarpY       0.00   // y-curvature setting, 0.0 - 0.1
 	
 float st(float x)
 {
@@ -253,6 +255,14 @@ vec3 gc (vec3 c, float bd, float bb)
 	return b2*c;
 }
 
+// Lottes curvature (PD)
+
+vec2 Warp(vec2 pos)
+{
+	pos=pos*2.0-1.0;    
+	pos*=vec2(1.0+(pos.y*pos.y)*WarpX,1.0+(pos.x*pos.x)*WarpY);
+	return pos*0.5+0.5;
+}
 
 void main()
 {
@@ -267,6 +277,8 @@ void main()
 		float diff = factor/intfactor;
 		tex.y = Overscan(tex.y*(rubyTextureSize.y/rubyInputSize.y), diff)*(rubyInputSize.y/rubyTextureSize.y); 
 	}
+
+	tex = Warp(tex*(rubyTextureSize/rubyInputSize))*(rubyInputSize/rubyTextureSize); 
 
 	vec2 size     = rubyTextureSize;
 	vec2 inv_size = 1.0/rubyTextureSize;
