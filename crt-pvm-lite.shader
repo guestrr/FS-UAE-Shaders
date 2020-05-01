@@ -90,7 +90,7 @@ void main()
 
 	vec2 tex = gl_TexCoord[0].xy*1.0001;
 	vec2 factor = rubyOutputSize/rubyInputSize;
-	vec2 intfactor = round(factor);
+	vec2 intfactor = floor(factor+0.5);
 	vec2 diff = factor/intfactor;
 	vec2 texcoord = Overscan(tex*(rubyTextureSize/rubyInputSize), diff.x, diff.y)*(rubyInputSize/rubyTextureSize); 
 	texcoord.x = tex.x;
