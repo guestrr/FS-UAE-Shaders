@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <shader language="GLSL">
 
-// The ScaleFX Scaler composition was assembled by guest.r in 2020.
+// The ScaleFX Scaler Hybrid composition was assembled by guest.r in 2020.
 // Based on the excellent ScalefX algorithm/shaders from Sp00kyFox
 
 /*
@@ -360,7 +360,7 @@ void main()
 
 
 
-// ScaleFX pass 3
+// ScaleFX (rev.2) pass 3 - Hybrid
 <vertex><![CDATA[
 uniform vec2 rubyOrigTextureSize;
 
@@ -380,26 +380,39 @@ void main(void) {
 ]]></vertex>
 
 
-<fragment scale_x="3.0" scale_y="3.0" filter="nearest"><![CDATA[
+<fragment scale="3.0" filter="nearest"><![CDATA[
 uniform sampler2D rubyTexture;
 uniform sampler2D rubyOrigTexture;
 uniform vec2 rubyTextureSize;
+uniform vec2 rubyOrigTextureSize;
 
-vec4 fmod(vec4 a, float b)
-{
-    vec4 c = fract(abs(a/b))*abs(b);
-    return sign(a)*c;
-}
+
+#define SFX_RAA 5.0    // from 0.0 to 10.0
 
 // extract corners
 vec4 loadCrn(vec4 x){
-	return floor(fmod(x*80.0 + 0.5, 9.0));
+	return floor(mod(x*80. + 0.5, 9.));
 }
 
 // extract mids
 vec4 loadMid(vec4 x){
-	return floor(fmod(x*8.888888 + 0.055555, 9.0));
+	return floor(mod(x*8.888888 + 0.055555, 9.));
 }
+
+vec3 res2x(vec3 pre2, vec3 pre1, vec3 px, vec3 pos1, vec3 pos2)
+{
+	vec3 t, m;
+	mat4x3 pre = mat4x3(pre2, pre1,   px, pos1);
+	mat4x3 pos = mat4x3(pre1,   px, pos1, pos2);
+	mat4x3  df = pos - pre;
+	
+	m = mix(px, 1.-px, step(px, vec3(0.5)));	
+	m = SFX_RAA * min(m, min(abs(df[1]), abs(df[2])));
+	t = (7. * (df[1] + df[2]) - 3. * (df[0] + df[3])) / 16.;
+	t = clamp(t, -m, m);
+   
+	return t;
+} 
 
 
 void main()
@@ -412,22 +425,50 @@ void main()
 		  H		w   z	  	  z
 	*/
 
+
 	// read data
 	vec4 E = texture2D(rubyTexture, gl_TexCoord[0].xy);
 
-	// extract data
-	vec4 crn = loadCrn(E);
-	vec4 mid = loadMid(E);
-
 	// determine subpixel
-	vec2 fp = floor(3.0 * fract(gl_TexCoord[0].xy*rubyTextureSize));
-	float  sp = fp.y == 0.0 ? (fp.x == 0.0 ? crn.x : fp.x == 1.0 ? mid.x : crn.y) : (fp.y == 1.0 ? (fp.x == 0.0 ? mid.w : fp.x == 1.0 ? 0.0 : mid.y) : (fp.x == 0.0 ? crn.w : fp.x == 1.0 ? mid.z : crn.z));
+	vec2 fc = fract(gl_TexCoord[0].xy*rubyTextureSize);
+	vec2 fp = floor(3.0 * fc);
+	
+	// check adjacent pixels to prevent artifacts
+	vec4 hn = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(fp.x - 1, 0) / rubyTextureSize);
+	vec4 vn = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(0, fp.y - 1) / rubyTextureSize);
 
-	// output coordinate - 0 = E, 1 = D, 2 = D0, 3 = F, 4 = F0, 5 = B, 6 = B0, 7 = H, 8 = H0
-	vec2 res = sp == 0.0 ? gl_TexCoord[1].xw : sp == 1.0 ? gl_TexCoord[1].yw : sp == 2.0 ? gl_TexCoord[1].zw : sp == 3.0 ? gl_TexCoord[2].xy : sp == 4.0 ? gl_TexCoord[2].zw : sp == 5.0 ? gl_TexCoord[3].xy : sp == 6.0 ? gl_TexCoord[3].zw : sp == 7.0 ? gl_TexCoord[4].xy : gl_TexCoord[4].zw;
+	// extract data
+	vec4 crn = loadCrn(E), hc = loadCrn(hn), vc = loadCrn(vn);
+	vec4 mid = loadMid(E), hm = loadMid(hn), vm = loadMid(vn);
 
-	// ouput	
-	gl_FragColor = vec4(texture2D(rubyOrigTexture, res).rgb,1.0);	
+	vec3 res = fp.y == 0. ? (fp.x == 0. ? vec3(crn.x, hc.y, vc.w) : fp.x == 1. ? vec3(mid.x, 0., vm.z) : vec3(crn.y, hc.x, vc.z)) : (fp.y == 1. ? (fp.x == 0. ? vec3(mid.w, hm.y, 0.) : fp.x == 1. ? vec3(0.) : vec3(mid.y, hm.w, 0.)) : (fp.x == 0. ? vec3(crn.w, hc.z, vc.x) : fp.x == 1. ? vec3(mid.z, 0., vm.x) : vec3(crn.z, hc.w, vc.y)));	
+	
+
+#define TEX(x, y) textureOffset(rubyOrigTexture, gl_TexCoord[0].xy, ivec2(x, y)).rgb
+
+	// reverseAA
+	vec3 E0 = TEX( 0, 0);
+	vec3 B0 = TEX( 0,-1), B1 = TEX( 0,-2), H0 = TEX( 0, 1), H1 = TEX( 0, 2);
+	vec3 D0 = TEX(-1, 0), D1 = TEX(-2, 0), F0 = TEX( 1, 0), F1 = TEX( 2, 0);
+
+	// output coordinate - 0 = E0, 1 = D0, 2 = D1, 3 = F0, 4 = F1, 5 = B0, 6 = B1, 7 = H0, 8 = H1
+	vec3 sfx = res.x == 1. ? D0 : res.x == 2. ? D1 : res.x == 3. ? F0 : res.x == 4. ? F1 : res.x == 5. ? B0 : res.x == 6. ? B1 : res.x == 7. ? H0 : H1;
+
+	// rAA weight
+	vec2 w = 2. * fc - 1.;
+	w.x = res.y == 0. ? w.x : 0.;
+	w.y = res.z == 0. ? w.y : 0.;
+
+	// rAA filter
+	vec3 t1 = res2x(D1, D0, E0, F0, F1);
+	vec3 t2 = res2x(B1, B0, E0, H0, H1);
+
+	vec3 a = min(min(min(min(B0,D0),E0),F0),H0);
+	vec3 b = max(max(max(max(B0,D0),E0),F0),H0);
+	vec3 raa = clamp(E0 + w.x*t1 + w.y*t2, a, b);
+
+	// hybrid output
+	gl_FragColor = vec4((res.x != 0.) ? sfx : raa, 0.);	 
 }	
 ]]></fragment>
 
@@ -807,8 +848,8 @@ uniform vec2 rubyOrigTextureSize;
 uniform int rubyFrameCount;
 
 
-#define SFXSHARP  0.70    // sharpness, from 0.0 to 1.0
-#define SFXCRISP  2.00    // crispness, from 1.0 to 7.0
+#define SFXSHARP  0.40    // sharpness, from 0.0 to 1.0
+#define SFXCRISP  1.50    // crispness, from 1.0 to 7.0
 
 const vec3 dtt = vec3(0.0001,0.0001,0.0001);
 
