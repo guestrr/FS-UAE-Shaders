@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <shader language="GLSL">
 
-// The ScaleFX Scaler Hybrid composition was assembled by guest.r in 2020.
-// Based on the excellent ScalefX algorithm/shaders from Sp00kyFox
-
 /*
 	ScaleFX - 4 Passes
 	by Sp00kyFox, 2016-03-30
@@ -360,7 +357,7 @@ void main()
 
 
 
-// ScaleFX (rev.2) pass 3 - Hybrid
+// ScaleFX pass 3
 <vertex><![CDATA[
 uniform vec2 rubyOrigTextureSize;
 
@@ -384,35 +381,22 @@ void main(void) {
 uniform sampler2D rubyTexture;
 uniform sampler2D rubyOrigTexture;
 uniform vec2 rubyTextureSize;
-uniform vec2 rubyOrigTextureSize;
 
-
-#define SFX_RAA 5.0    // from 0.0 to 10.0
+vec4 fmod(vec4 a, float b)
+{
+    vec4 c = fract(abs(a/b))*abs(b);
+    return sign(a)*c;
+}
 
 // extract corners
 vec4 loadCrn(vec4 x){
-	return floor(mod(x*80. + 0.5, 9.));
+	return floor(fmod(x*80.0 + 0.5, 9.0));
 }
 
 // extract mids
 vec4 loadMid(vec4 x){
-	return floor(mod(x*8.888888 + 0.055555, 9.));
+	return floor(fmod(x*8.888888 + 0.055555, 9.0));
 }
-
-vec3 res2x(vec3 pre2, vec3 pre1, vec3 px, vec3 pos1, vec3 pos2)
-{
-	vec3 t, m;
-	mat4x3 pre = mat4x3(pre2, pre1,   px, pos1);
-	mat4x3 pos = mat4x3(pre1,   px, pos1, pos2);
-	mat4x3  df = pos - pre;
-	
-	m = mix(px, 1.-px, step(px, vec3(0.5)));	
-	m = SFX_RAA * min(m, min(abs(df[1]), abs(df[2])));
-	t = (7. * (df[1] + df[2]) - 3. * (df[0] + df[3])) / 16.;
-	t = clamp(t, -m, m);
-   
-	return t;
-} 
 
 
 void main()
@@ -425,50 +409,355 @@ void main()
 		  H		w   z	  	  z
 	*/
 
-
 	// read data
 	vec4 E = texture2D(rubyTexture, gl_TexCoord[0].xy);
 
-	// determine subpixel
-	vec2 fc = fract(gl_TexCoord[0].xy*rubyTextureSize);
-	vec2 fp = floor(3.0 * fc);
-	
-	// check adjacent pixels to prevent artifacts
-	vec4 hn = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(fp.x - 1, 0) / rubyTextureSize);
-	vec4 vn = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(0, fp.y - 1) / rubyTextureSize);
-
 	// extract data
-	vec4 crn = loadCrn(E), hc = loadCrn(hn), vc = loadCrn(vn);
-	vec4 mid = loadMid(E), hm = loadMid(hn), vm = loadMid(vn);
+	vec4 crn = loadCrn(E);
+	vec4 mid = loadMid(E);
 
-	vec3 res = fp.y == 0. ? (fp.x == 0. ? vec3(crn.x, hc.y, vc.w) : fp.x == 1. ? vec3(mid.x, 0., vm.z) : vec3(crn.y, hc.x, vc.z)) : (fp.y == 1. ? (fp.x == 0. ? vec3(mid.w, hm.y, 0.) : fp.x == 1. ? vec3(0.) : vec3(mid.y, hm.w, 0.)) : (fp.x == 0. ? vec3(crn.w, hc.z, vc.x) : fp.x == 1. ? vec3(mid.z, 0., vm.x) : vec3(crn.z, hc.w, vc.y)));	
+	// determine subpixel
+	vec2 fp = floor(3.0 * fract(gl_TexCoord[0].xy*rubyTextureSize));
+	float  sp = fp.y == 0.0 ? (fp.x == 0.0 ? crn.x : fp.x == 1.0 ? mid.x : crn.y) : (fp.y == 1.0 ? (fp.x == 0.0 ? mid.w : fp.x == 1.0 ? 0.0 : mid.y) : (fp.x == 0.0 ? crn.w : fp.x == 1.0 ? mid.z : crn.z));
+
+	// output coordinate - 0 = E, 1 = D, 2 = D0, 3 = F, 4 = F0, 5 = B, 6 = B0, 7 = H, 8 = H0
+	vec2 res = sp == 0.0 ? gl_TexCoord[1].xw : sp == 1.0 ? gl_TexCoord[1].yw : sp == 2.0 ? gl_TexCoord[1].zw : sp == 3.0 ? gl_TexCoord[2].xy : sp == 4.0 ? gl_TexCoord[2].zw : sp == 5.0 ? gl_TexCoord[3].xy : sp == 6.0 ? gl_TexCoord[3].zw : sp == 7.0 ? gl_TexCoord[4].xy : gl_TexCoord[4].zw;
+
+	// ouput	
+	gl_FragColor = vec4(texture2D(rubyOrigTexture, res).rgb,1.0);	
+}	
+]]></fragment>
+
+
+
+/*
+	rAA post-3x - Pass 0
+	by Sp00kyFox, 2018-10-20
+
+Filter:	Nearest
+Scale:	1x
+
+This is a generalized continuation of the reverse antialiasing filter by
+Christoph Feck. Unlike the original filter this is supposed to be used on an
+already upscaled image. Which makes it possible to combine rAA with other filters
+just as ScaleFX, xBR or others.
+
+Pass 0 does the horizontal filtering.
+
+
+
+Copyright (c) 2018 Sp00kyFox - ScaleFX@web.de
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+*/ 
+
+<vertex><![CDATA[
+
+void main(void) {
+    gl_Position = ftransform();
+    gl_TexCoord[0] = gl_MultiTexCoord0;
+}
+]]></vertex>
+
+
+<fragment scale="1.0" filter="nearest"><![CDATA[
+uniform sampler2D rubyTexture;
+uniform vec2 rubyTextureSize;
+
+
+#define RAA_SHR0 2.0
+#define RAA_SMT0 0.5
+#define RAA_DVT0 1.0
+
+const int scl = 3; // scale factor
+const int rad = 7; // search radius
+
+
+// core function of rAA - tilt of a pixel
+vec3 res2x(vec3 pre2, vec3 pre1, vec3 px, vec3 pos1, vec3 pos2)
+{
+    float d1, d2, w;
+	vec3 a, m, t, t1, t2;
+    mat4x3 pre = mat4x3(pre2, pre1,   px, pos1);
+    mat4x3 pos = mat4x3(pre1,   px, pos1, pos2);
+    mat4x3  df = pos - pre;
+
+    m.x = (px.x < 0.5) ? px.x : (1.0-px.x);
+    m.y = (px.y < 0.5) ? px.y : (1.0-px.y);
+    m.z = (px.z < 0.5) ? px.z : (1.0-px.z);
 	
+	m = RAA_SHR0 * min(m, min(abs(df[1]), abs(df[2])));   // magnitude
+	t = (7. * (df[1] + df[2]) - 3. * (df[0] + df[3])) / 16.; // tilt
+	
+	a.x = t.x == 0.0 ? 1.0 : m.x/abs(t.x);
+	a.y = t.y == 0.0 ? 1.0 : m.y/abs(t.y);
+	a.z = t.z == 0.0 ? 1.0 : m.z/abs(t.z);	
+	
+	t1 = clamp(t, -m, m);                       // limit channels
+	t2 = min(1.0, min(min(a.x, a.y), a.z)) * t; // limit length
+	
+	d1 = length(df[1]); d2 = length(df[2]);
+	d1 = d1 == 0.0 ? 0.0 : length(cross(df[1], t1))/d1; // distance between line (px, pre1) and point px-t1
+	d2 = d2 == 0.0 ? 0.0 : length(cross(df[2], t1))/d2; // distance between line (px, pos1) and point px+t1
 
-#define TEX(x, y) textureOffset(rubyOrigTexture, gl_TexCoord[0].xy, ivec2(x, y)).rgb
+	w = min(1.0, max(d1,d2)/0.8125); // color deviation from optimal value
+	
+	return mix(t1, t2, pow(w, RAA_DVT0));
+}
 
-	// reverseAA
-	vec3 E0 = TEX( 0, 0);
-	vec3 B0 = TEX( 0,-1), B1 = TEX( 0,-2), H0 = TEX( 0, 1), H1 = TEX( 0, 2);
-	vec3 D0 = TEX(-1, 0), D1 = TEX(-2, 0), F0 = TEX( 1, 0), F1 = TEX( 2, 0);
 
-	// output coordinate - 0 = E0, 1 = D0, 2 = D1, 3 = F0, 4 = F1, 5 = B0, 6 = B1, 7 = H0, 8 = H1
-	vec3 sfx = res.x == 1. ? D0 : res.x == 2. ? D1 : res.x == 3. ? F0 : res.x == 4. ? F1 : res.x == 5. ? B0 : res.x == 6. ? B1 : res.x == 7. ? H0 : H1;
 
-	// rAA weight
-	vec2 w = 2. * fc - 1.;
-	w.x = res.y == 0. ? w.x : 0.;
-	w.y = res.z == 0. ? w.y : 0.;
+void main()
+{	
+	// read texels
 
-	// rAA filter
-	vec3 t1 = res2x(D1, D0, E0, F0, F1);
-	vec3 t2 = res2x(B1, B0, E0, H0, H1);
+	vec3 tx[2*rad+1];
 
-	vec3 a = min(min(min(min(B0,D0),E0),F0),H0);
-	vec3 b = max(max(max(max(B0,D0),E0),F0),H0);
-	vec3 raa = clamp(E0 + w.x*t1 + w.y*t2, a, b);
+	#define TX(n) tx[(n)+rad]
+	
+	TX(0) = texture2D(rubyTexture, gl_TexCoord[0].xy        ).rgb;
+	
+	for(int i=1; i<=rad; i++){
+		TX(-i) = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(float(-i),0.0)/rubyTextureSize).rgb;
+		TX( i) = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(float( i),0.0)/rubyTextureSize).rgb;
+	}
+	
+	
+	// prepare variables for candidate search
+	
+	ivec2 i1, i2;
+	vec3 df1, df2;
+	vec2 d1, d2, d3;
+	bvec2 cn;
+	
+	df1 = TX(1)-TX(0); df2 = TX(0)-TX(-1);
+	
+	d2 = vec2(length(df1), length(df2));
+	d3 = d2.yx;
+	
+	
+	// smoothness weight, protects smooth gradients
+	float sw = d2.x + d2.y;
+	sw = sw == 0.0 ? 1.0 : pow(length(df1-df2)/sw, RAA_SMT0);
+	
+	
+	// look for proper candidates
+	for(int i=1; i<rad; i++){
+		d1 = d2;
+		d2 = d3;
+		d3 = vec2(distance(TX(-i-1), TX(-i)), distance(TX(i), TX(i+1)));
 
-	// hybrid output
-	gl_FragColor = vec4((res.x != 0.) ? sfx : raa, 0.);	 
+		cn.x = max(d1.x,d3.x)<d2.x;
+		cn.y = max(d1.y,d3.y)<d2.y;
+		
+		i2.x = cn.x && i2.x==0 && i1.x!=0 ? i : i2.x;
+		i2.y = cn.y && i2.y==0 && i1.y!=0 ? i : i2.y;
+		
+		i1.x = cn.x && i1.x==0 ? i : i1.x;
+		i1.y = cn.y && i1.y==0 ? i : i1.y;
+		
+	}
+
+	i2.x = i2.x == 0 ? i1.x+1 : i2.x;
+	i2.y = i2.y == 0 ? i1.y+1 : i2.y;
+	
+	// rAA core with the candidates found above
+	vec3 t = res2x(TX(-i2.x), TX(-i1.x), TX(0), TX(i1.y), TX(i2.y));
+
+	// distance weight
+	float dw = ((i1.x == 0)||(i1.y == 0)) ? 0.0 : 2.0 * ((i1.x-1.0)/(i1.x+i1.y-2.0)) - 1.0;	
+	
+	// result
+	vec3 res = TX(0) + (scl-1.0)/scl * sw*dw * t;
+	
+	// prevent ringing	
+	vec3 lo  = min(min(TX(-1),TX(0)),TX(1));
+	vec3 hi  = max(max(TX(-1),TX(0)),TX(1));
+	
+	gl_FragColor = vec4(clamp(res, lo, hi), 1.0);	
+}	
+]]></fragment>
+
+
+/*
+	rAA post-3x - Pass 1
+	by Sp00kyFox, 2018-10-20
+
+Filter:	Nearest
+Scale:	1x
+
+This is a generalized continuation of the reverse antialiasing filter by
+Christoph Feck. Unlike the original filter this is supposed to be used on an
+already upscaled image. Which makes it possible to combine rAA with other filters
+just as ScaleFX, xBR or others.
+
+Pass 1 does the vertical filtering.
+
+
+
+Copyright (c) 2018 Sp00kyFox - ScaleFX@web.de
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+*/ 
+
+<vertex><![CDATA[
+
+void main(void) {
+    gl_Position = ftransform();
+    gl_TexCoord[0] = gl_MultiTexCoord0;
+}
+]]></vertex>
+
+
+<fragment scale="1.0" filter="nearest"><![CDATA[
+uniform sampler2D rubyTexture;
+uniform vec2 rubyTextureSize;
+
+
+#define RAA_SHR0 2.0
+#define RAA_SMT0 0.5
+#define RAA_DVT0 1.0
+
+const int scl = 3; // scale factor
+const int rad = 7; // search radius
+
+
+// core function of rAA - tilt of a pixel
+vec3 res2x(vec3 pre2, vec3 pre1, vec3 px, vec3 pos1, vec3 pos2)
+{
+    float d1, d2, w;
+	vec3 a, m, t, t1, t2;
+    mat4x3 pre = mat4x3(pre2, pre1,   px, pos1);
+    mat4x3 pos = mat4x3(pre1,   px, pos1, pos2);
+    mat4x3  df = pos - pre;
+
+    m.x = (px.x < 0.5) ? px.x : (1.0-px.x);
+    m.y = (px.y < 0.5) ? px.y : (1.0-px.y);
+    m.z = (px.z < 0.5) ? px.z : (1.0-px.z);
+	
+	m = RAA_SHR0 * min(m, min(abs(df[1]), abs(df[2])));   // magnitude
+	t = (7. * (df[1] + df[2]) - 3. * (df[0] + df[3])) / 16.; // tilt
+	
+	a.x = t.x == 0.0 ? 1.0 : m.x/abs(t.x);
+	a.y = t.y == 0.0 ? 1.0 : m.y/abs(t.y);
+	a.z = t.z == 0.0 ? 1.0 : m.z/abs(t.z);	
+	
+	t1 = clamp(t, -m, m);                       // limit channels
+	t2 = min(1.0, min(min(a.x, a.y), a.z)) * t; // limit length
+	
+	d1 = length(df[1]); d2 = length(df[2]);
+	d1 = d1 == 0.0 ? 0.0 : length(cross(df[1], t1))/d1; // distance between line (px, pre1) and point px-t1
+	d2 = d2 == 0.0 ? 0.0 : length(cross(df[2], t1))/d2; // distance between line (px, pos1) and point px+t1
+
+	w = min(1.0, max(d1,d2)/0.8125); // color deviation from optimal value
+	
+	return mix(t1, t2, pow(w, RAA_DVT0));
+}
+
+
+
+void main()
+{	
+	// read texels
+
+	vec3 tx[2*rad+1];
+
+	#define TX(n) tx[(n)+rad]
+	
+	TX(0) = texture2D(rubyTexture, gl_TexCoord[0].xy        ).rgb;
+	
+	for(int i=1; i<=rad; i++){
+		TX(-i) = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(0.0,float(-i))/rubyTextureSize).rgb;
+		TX( i) = texture2D(rubyTexture, gl_TexCoord[0].xy + vec2(0.0,float( i))/rubyTextureSize).rgb;
+	}
+	
+	
+	// prepare variables for candidate search
+	
+	ivec2 i1, i2;
+	vec3 df1, df2;
+	vec2 d1, d2, d3;
+	bvec2 cn;
+	
+	df1 = TX(1)-TX(0); df2 = TX(0)-TX(-1);
+	
+	d2 = vec2(length(df1), length(df2));
+	d3 = d2.yx;
+	
+	
+	// smoothness weight, protects smooth gradients
+	float sw = d2.x + d2.y;
+	sw = sw == 0.0 ? 1.0 : pow(length(df1-df2)/sw, RAA_SMT0);
+	
+	
+	// look for proper candidates
+	for(int i=1; i<rad; i++){
+		d1 = d2;
+		d2 = d3;
+		d3 = vec2(distance(TX(-i-1), TX(-i)), distance(TX(i), TX(i+1)));
+
+		cn.x = max(d1.x,d3.x)<d2.x;
+		cn.y = max(d1.y,d3.y)<d2.y;
+		
+		i2.x = cn.x && i2.x==0 && i1.x!=0 ? i : i2.x;
+		i2.y = cn.y && i2.y==0 && i1.y!=0 ? i : i2.y;
+		
+		i1.x = cn.x && i1.x==0 ? i : i1.x;
+		i1.y = cn.y && i1.y==0 ? i : i1.y;
+		
+	}
+
+	i2.x = i2.x == 0 ? i1.x+1 : i2.x;
+	i2.y = i2.y == 0 ? i1.y+1 : i2.y;
+	
+	// rAA core with the candidates found above
+	vec3 t = res2x(TX(-i2.x), TX(-i1.x), TX(0), TX(i1.y), TX(i2.y));
+
+	// distance weight
+	float dw = ((i1.x == 0)||(i1.y == 0)) ? 0.0 : 2.0 * ((i1.x-1.0)/(i1.x+i1.y-2.0)) - 1.0;	
+	
+	// result
+	vec3 res = TX(0) + (scl-1.0)/scl * sw*dw * t;
+	
+	// prevent ringing	
+	vec3 lo  = min(min(TX(-1),TX(0)),TX(1));
+	vec3 hi  = max(max(TX(-1),TX(0)),TX(1));
+	
+	gl_FragColor = vec4(clamp(res, lo, hi), 1.0);
 }	
 ]]></fragment>
 
@@ -478,15 +767,13 @@ void main()
 void main(void) {
     gl_Position = ftransform();
     gl_TexCoord[0] = gl_MultiTexCoord0;
-	gl_TexCoord[0].xy = gl_TexCoord[0].xy*vec2(2.0,1.0);	
 }
 ]]></vertex>
 
 
-<fragment scale_x="2.0" scale_y="1.0" filter="linear"><![CDATA[
+<fragment scale="1.0" filter="linear"><![CDATA[
 uniform sampler2D rubyTexture;
 uniform vec2 rubyTextureSize;
-uniform vec2 rubyInputSize;
 
 vec2 InvSize = 1.0/rubyTextureSize;
 
@@ -737,10 +1024,6 @@ void main()
 {	
 	
 	vec3 fxaa_hq = FxaaPixelShader(gl_TexCoord[0].xy, rubyTexture, InvSize.xy);
-
-	if (gl_TexCoord[0].x >= rubyInputSize.x/rubyTextureSize.x) 
-	    fxaa_hq = texture2D(rubyTexture, gl_TexCoord[0].xy - vec2(rubyInputSize.x/rubyTextureSize.x,0.0));
-
 	gl_FragColor = vec4(fxaa_hq, 1.0); 
 }	
 ]]></fragment>
@@ -779,18 +1062,13 @@ void main(void) {
 <fragment scale="2.0" filter="linear"><![CDATA[
 uniform sampler2D rubyTexture;
 uniform vec2 rubyTextureSize;
-uniform vec2 rubyInputSize;
 
 const vec3 dt = vec3(1.0,1.0,1.0);
 
-vec4 yx = vec4(0.5,0.5,-0.5,-0.5)/rubyTextureSize.xyxy;
+vec4 yx = vec4(0.4,0.4,-0.4,-0.4)/rubyTextureSize.xyxy;
 
 void main()
 {	
-	vec2 tex = floor(gl_TexCoord[0].xy*rubyTextureSize)/rubyTextureSize + 0.5/rubyTextureSize; 
-	if (gl_TexCoord[0].x >= 0.5*rubyInputSize.x/rubyTextureSize.x) gl_FragColor = texture2D(rubyTexture, tex); else
-	
-	{
 	vec3 s00 = texture2D(rubyTexture, gl_TexCoord[0].xy + yx.zw).xyz; 
 	vec3 s20 = texture2D(rubyTexture, gl_TexCoord[0].xy + yx.xw).xyz; 
 	vec3 s22 = texture2D(rubyTexture, gl_TexCoord[0].xy + yx.xy).xyz; 
@@ -802,7 +1080,6 @@ void main()
 	vec3 t1 = 0.5*(m2*(s00+s22)+m1*(s02+s20))/(m1+m2);
 
 	gl_FragColor = vec4(t1,1.0); 
-	}
 }	
 ]]></fragment>
 
@@ -848,28 +1125,23 @@ uniform vec2 rubyOrigTextureSize;
 uniform int rubyFrameCount;
 
 
-#define SFXSHARP  0.40    // sharpness, from 0.0 to 1.0
-#define SFXCRISP  1.50    // crispness, from 1.0 to 7.0
+#define SFXSHARP  0.35    // sharpness, from 0.0 to 1.0
+#define SFXCRISP  2.00    // crispness, from 1.0 to 7.0
 
 const vec3 dtt = vec3(0.0001,0.0001,0.0001);
 
 void main()
 {	
-		vec2 texcoord0  = gl_TexCoord[0].xy*vec2(0.5,1.0);
-		vec2 PIXEL_SIZE = 1.0/rubyTextureSize;
-		vec2 texcoord = texcoord0;
-		vec2 texp = texcoord0 + vec2(0.5*rubyInputSize.x/rubyTextureSize.x,0.0);
-
-		vec3 color = texture2D(rubyTexture, texcoord).rgb;
+		vec3 color = texture2D(rubyTexture, gl_TexCoord[0].xy).rgb;
 		
 		vec3 pixel, pixel1;
 		float x;
 		float LOOPSIZE = 1.0;
 
-		vec2 tex = floor(texp*rubyTextureSize)/rubyTextureSize + 0.5/rubyTextureSize; 
+		vec2 tex = (gl_TexCoord[0].xy*(rubyTextureSize/rubyInputSize))*((rubyInputSize/6.0)/rubyOrigTextureSize); 
 
-		vec2 dx = vec2(1.0/rubyTextureSize.x, 0.0);
-		vec2 dy = vec2(0.0, 1.0/rubyTextureSize.y);
+		vec2 dx = vec2(1.0/rubyOrigTextureSize.x, 0.0);
+		vec2 dy = vec2(0.0, 1.0/rubyOrigTextureSize.y);
 
 		float w;
 		float wsum = 0.0;
@@ -883,7 +1155,7 @@ void main()
 	
 			do
 			{
-				pixel  = texture2D(rubyTexture, tex + x*dx + y*dy).rgb;
+				pixel  = texture2D(rubyOrigTexture, tex + x*dx + y*dy).rgb;
 				dif = color - pixel;
 				w = dot(dif, dif);
 				w = 1.0/(pow(10.0*w + 0.0001, SFXCRISP));
@@ -906,7 +1178,7 @@ void main()
 		float k2 = dot(ref-color2,ref-color2) + 0.000001;
 		
 		color = (color1*k2 + color2*k1)/(k1+k2); 
-
+	
 		gl_FragColor = vec4(color,1.0);	
 }	
 ]]></fragment>
