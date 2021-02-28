@@ -767,13 +767,15 @@ void main()
 void main(void) {
     gl_Position = ftransform();
     gl_TexCoord[0] = gl_MultiTexCoord0;
+	gl_TexCoord[0].xy = gl_TexCoord[0].xy*vec2(2.0,1.0);	
 }
 ]]></vertex>
 
 
-<fragment scale="1.0" filter="linear"><![CDATA[
+<fragment scale_x="2.0" scale_y="1.0" filter="linear"><![CDATA[
 uniform sampler2D rubyTexture;
 uniform vec2 rubyTextureSize;
+uniform vec2 rubyInputSize;
 
 vec2 InvSize = 1.0/rubyTextureSize;
 
@@ -1024,6 +1026,10 @@ void main()
 {	
 	
 	vec3 fxaa_hq = FxaaPixelShader(gl_TexCoord[0].xy, rubyTexture, InvSize.xy);
+
+	if (gl_TexCoord[0].x >= rubyInputSize.x/rubyTextureSize.x) 
+	    fxaa_hq = texture2D(rubyTexture, gl_TexCoord[0].xy - vec2(rubyInputSize.x/rubyTextureSize.x,0.0));
+
 	gl_FragColor = vec4(fxaa_hq, 1.0); 
 }	
 ]]></fragment>
@@ -1062,13 +1068,18 @@ void main(void) {
 <fragment scale="2.0" filter="linear"><![CDATA[
 uniform sampler2D rubyTexture;
 uniform vec2 rubyTextureSize;
+uniform vec2 rubyInputSize;
 
 const vec3 dt = vec3(1.0,1.0,1.0);
 
-vec4 yx = vec4(0.4,0.4,-0.4,-0.4)/rubyTextureSize.xyxy;
+vec4 yx = vec4(0.5,0.5,-0.5,-0.5)/rubyTextureSize.xyxy;
 
 void main()
 {	
+	vec2 tex = floor(gl_TexCoord[0].xy*rubyTextureSize)/rubyTextureSize + 0.5/rubyTextureSize; 
+	if (gl_TexCoord[0].x >= 0.5*rubyInputSize.x/rubyTextureSize.x) gl_FragColor = texture2D(rubyTexture, tex); else
+	
+	{
 	vec3 s00 = texture2D(rubyTexture, gl_TexCoord[0].xy + yx.zw).xyz; 
 	vec3 s20 = texture2D(rubyTexture, gl_TexCoord[0].xy + yx.xw).xyz; 
 	vec3 s22 = texture2D(rubyTexture, gl_TexCoord[0].xy + yx.xy).xyz; 
@@ -1080,6 +1091,7 @@ void main()
 	vec3 t1 = 0.5*(m2*(s00+s22)+m1*(s02+s20))/(m1+m2);
 
 	gl_FragColor = vec4(t1,1.0); 
+	}
 }	
 ]]></fragment>
 
@@ -1126,22 +1138,27 @@ uniform int rubyFrameCount;
 
 
 #define SFXSHARP  0.35    // sharpness, from 0.0 to 1.0
-#define SFXCRISP  2.00    // crispness, from 1.0 to 7.0
+#define SFXCRISP  1.50    // crispness, from 1.0 to 7.0
 
 const vec3 dtt = vec3(0.0001,0.0001,0.0001);
 
 void main()
 {	
-		vec3 color = texture2D(rubyTexture, gl_TexCoord[0].xy).rgb;
+		vec2 texcoord0  = gl_TexCoord[0].xy*vec2(0.5,1.0);
+		vec2 PIXEL_SIZE = 1.0/rubyTextureSize;
+		vec2 texcoord = texcoord0;
+		vec2 texp = texcoord0 + vec2(0.5*rubyInputSize.x/rubyTextureSize.x,0.0);
+
+		vec3 color = texture2D(rubyTexture, texcoord).rgb;
 		
 		vec3 pixel, pixel1;
 		float x;
 		float LOOPSIZE = 1.0;
 
-		vec2 tex = (gl_TexCoord[0].xy*(rubyTextureSize/rubyInputSize))*((rubyInputSize/6.0)/rubyOrigTextureSize); 
+		vec2 tex = floor(texp*rubyTextureSize)/rubyTextureSize + 0.5/rubyTextureSize; 
 
-		vec2 dx = vec2(1.0/rubyOrigTextureSize.x, 0.0);
-		vec2 dy = vec2(0.0, 1.0/rubyOrigTextureSize.y);
+		vec2 dx = vec2(1.0/rubyTextureSize.x, 0.0);
+		vec2 dy = vec2(0.0, 1.0/rubyTextureSize.y);
 
 		float w;
 		float wsum = 0.0;
@@ -1155,7 +1172,7 @@ void main()
 	
 			do
 			{
-				pixel  = texture2D(rubyOrigTexture, tex + x*dx + y*dy).rgb;
+				pixel  = texture2D(rubyTexture, tex + x*dx + y*dy).rgb;
 				dif = color - pixel;
 				w = dot(dif, dif);
 				w = 1.0/(pow(10.0*w + 0.0001, SFXCRISP));
@@ -1178,7 +1195,7 @@ void main()
 		float k2 = dot(ref-color2,ref-color2) + 0.000001;
 		
 		color = (color1*k2 + color2*k1)/(k1+k2); 
-	
+
 		gl_FragColor = vec4(color,1.0);	
 }	
 ]]></fragment>
